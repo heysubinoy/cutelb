@@ -1,0 +1,16 @@
+executable lb
+  main-is:             Main.hs
+  hs-source-dirs:      app, src
+  build-depends:
+      base >=4.14 && <5
+    , text
+    , bytestring
+    , containers
+    , yaml
+    , aeson
+    , stm
+    , warp
+    , wai
+    , http-client
+    , http-types
+  default-language:    Haskell2010
