@@ -1,37 +1,38 @@
 module Proxy.Forward where
 
-import Config.Types
-import Network.Wai
+import qualified Config.Types as Cfg
+import qualified Network.Wai as Wai
 import Network.HTTP.Client
 import Network.HTTP.Types
-import qualified Data.ByteString.Lazy as LBS
+import qualified Data.Text as T
+import qualified Data.ByteString.Char8 as BS
 
-forwardRequest :: BackendConfig -> Request -> (Response -> IO ResponseReceived) -> IO ResponseReceived
-forwardRequest backend req respond = do
+forwardRequest :: Cfg.BackendConfig -> Wai.Request -> (Wai.Response -> IO Wai.ResponseReceived) -> IO Wai.ResponseReceived
+forwardRequest backend waiReq respond = do
   manager <- newManager defaultManagerSettings
 
-  body <- strictRequestBody req
+  body <- Wai.strictRequestBody waiReq
 
   let url =
         "http://"
-        <> show (host backend)
+        <> T.unpack (Cfg.host backend)
         <> ":"
-        <> show (port backend)
-        <> show (rawPathInfo req)
+        <> show (Cfg.port backend)
+        <> BS.unpack (Wai.rawPathInfo waiReq)
 
   initReq <- parseRequest url
 
   let proxyReq =
         initReq
-          { method = requestMethod req
-          , requestHeaders = requestHeaders req
+          { method = Wai.requestMethod waiReq
+          , requestHeaders = Wai.requestHeaders waiReq
           , requestBody = RequestBodyLBS body
           }
 
   resp <- httpLbs proxyReq manager
 
   respond $
-    responseLBS
+    Wai.responseLBS
       (responseStatus resp)
       (responseHeaders resp)
       (responseBody resp)

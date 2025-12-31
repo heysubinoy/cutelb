@@ -23,5 +23,4 @@ roundRobin ru = do
       let idx = i `mod` length backends
 
       writeTVar (ruCursor ru) (i + 1)
-
-          pure (backends !! idx)
+      pure (backends !! idx)

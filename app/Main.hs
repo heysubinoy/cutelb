@@ -1,10 +1,21 @@
-import Server.HTTP
-startHTTP runtime
+module Main where
+
+import Server.HTTP (startHTTP)
+import Config.Loader (loadConfig)
+import Config.Validate (validateConfig)
+import Runtime.Init (initRuntime)
+
+import Data.Text (unpack)
+import System.Environment (getArgs)
 
 main :: IO ()
 main = do
-  opts <- parseOptions
-  cfg  <- loadConfig (configPath opts)
+  args <- getArgs
+  let configPath = case args of
+        (p:_) -> p
+        []    -> "config.yaml"
+
+  cfg <- loadConfig configPath
 
   case validateConfig cfg of
     Left err -> error (unpack err)

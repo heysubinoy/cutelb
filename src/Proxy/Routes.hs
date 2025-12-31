@@ -1,13 +1,12 @@
 module Proxy.Routes where
 
-import Config.Types
+import qualified Config.Types as Cfg
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.List (find)
 
-matchRoute :: [RouteConfig] -> Text -> Maybe RouteConfig
-matchRoute routes path =
-  find matches routes
+matchRoute :: [Cfg.RouteConfig] -> Text -> Maybe Cfg.RouteConfig
+matchRoute cfgRoutes reqPath =
+  find matches cfgRoutes
   where
-    matches r = path `T.isPrefixOf` pathOf r
-    pathOf = path
+    matches r = (Cfg.path r) `T.isPrefixOf` reqPath

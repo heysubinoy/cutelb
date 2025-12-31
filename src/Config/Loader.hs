@@ -8,4 +8,4 @@ loadConfig path = do
     result <- decodeFileEither path
     case result of
         Left err -> error (prettyPrintParseException err)
-        Right cfg -> pure Config
+        Right cfg -> pure cfg

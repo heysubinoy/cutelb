@@ -1,6 +1,8 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Config.Validate where
 
-import Config.Types
+import Config.Types (Config(..), RouteConfig(..), UpstreamConfig(..))
 import Data.Text (Text)
 import qualified Data.Map.Strict as Map
 
