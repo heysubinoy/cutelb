@@ -21,3 +21,4 @@ upstreams:
 routes:
   - path: /
     upstream: backend
+    match_type: prefix

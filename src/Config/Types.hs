@@ -45,9 +45,23 @@ instance FromJSON Strategy where
     "least_conn"  -> pure LeastConn
     _             -> fail "unknown strategy"
 
+data MatchType
+  = MatchExact   -- Only matches the exact path
+  | MatchPrefix  -- Matches if path starts with pattern
+  | MatchRegex   -- Matches using regex pattern
+  deriving (Show, Generic)
+
+instance FromJSON MatchType where
+  parseJSON = withText "MatchType" $ \case
+    "exact"  -> pure MatchExact
+    "prefix" -> pure MatchPrefix
+    "regex"  -> pure MatchRegex
+    _        -> fail "unknown match_type (use: exact, prefix, regex)"
+
 data RouteConfig = RouteConfig
-  { path     :: Text
-  , upstream :: Text
+  { path       :: Text
+  , upstream   :: Text
+  , match_type :: MatchType
   } deriving (Show, Generic)
 
 instance FromJSON RouteConfig
