@@ -9,7 +9,7 @@ initRuntime :: Config -> IO Runtime
 initRuntime cfg = do
   ups <- atomically $ traverse initUpstream (upstreams cfg)
   tvar <- newTVarIO ups
-  pure $ Runtime tvar (routes cfg)
+  pure $ Runtime tvar (routes cfg) (server cfg)
 
 initUpstream :: UpstreamConfig -> STM RuntimeUpstream
 initUpstream u = do

@@ -1,5 +1,6 @@
 module Server.HTTP where
 
+import Config.Types (ServerConfig(..))
 import Network.Wai.Handler.Warp
 import Proxy.App
 import Runtime.State
@@ -7,4 +8,4 @@ import Runtime.State
 
 startHTTP :: Runtime -> IO ()
 startHTTP runtime =
-  run 8080 (proxyApp runtime)
+  run (listen (rtServer runtime)) (proxyApp runtime)

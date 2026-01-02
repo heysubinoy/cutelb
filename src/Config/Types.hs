@@ -11,7 +11,6 @@ import Data.Aeson
 
 data ServerConfig = ServerConfig
   { listen :: Int
-  , workers :: Maybe Int
   , access_log :: Maybe FilePath
   , error_log :: Maybe FilePath
   } deriving (Show, Generic)
