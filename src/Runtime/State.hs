@@ -11,8 +11,13 @@ data Runtime = Runtime
   , rtServer    :: ServerConfig
   }
 
+data RuntimeBackend = RuntimeBackend
+  { rbConfig       :: BackendConfig
+  , rbConnections  :: TVar Int
+  , rbResponseTime :: TVar Double  -- exponential moving average of response time in seconds
+  }
 data RuntimeUpstream = RuntimeUpstream
-  { ruBackends :: [BackendConfig]
+  { ruBackends :: [RuntimeBackend]
   , ruStrategy :: Strategy
   , ruCursor   :: TVar Int
   }

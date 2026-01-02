@@ -36,14 +36,20 @@ instance FromJSON BackendConfig
 
 data Strategy
   = RoundRobin
+  | WeightedRoundRobin
   | LeastConn
+  | Random
+  | LeastResponseTime
   deriving (Show, Generic)
 
 instance FromJSON Strategy where
   parseJSON = withText "Strategy" $ \case
-    "round_robin" -> pure RoundRobin
-    "least_conn"  -> pure LeastConn
-    _             -> fail "unknown strategy"
+    "round_robin"          -> pure RoundRobin
+    "weighted_round_robin" -> pure WeightedRoundRobin
+    "least_conn"           -> pure LeastConn
+    "random"               -> pure Random
+    "least_response_time"  -> pure LeastResponseTime
+    _                      -> fail "unknown strategy (use: round_robin, weighted_round_robin, least_conn, random, least_response_time)"
 
 data MatchType
   = MatchExact   -- Only matches the exact path

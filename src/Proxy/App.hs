@@ -34,5 +34,5 @@ proxyApp runtime req respond = do
             responseLBS status502 [] "Upstream not found"
 
         Just ru -> do
-          backend <- atomically $ pickBackend ru
+          backend <- pickBackend ru
           forwardRequest backend req respond
