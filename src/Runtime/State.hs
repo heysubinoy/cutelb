@@ -4,6 +4,7 @@ import Config.Types (BackendConfig, RouteConfig, ServerConfig, Strategy)
 import Control.Concurrent.STM
 import Data.Map.Strict (Map)
 import Data.Text (Text)
+import Data.Vector (Vector)
 
 data Runtime = Runtime
   { rtUpstreams :: TVar (Map Text RuntimeUpstream)
@@ -17,9 +18,10 @@ data RuntimeBackend = RuntimeBackend
   , rbResponseTime :: TVar Double  -- exponential moving average of response time in seconds
   }
 data RuntimeUpstream = RuntimeUpstream
-  { ruBackends :: [RuntimeBackend]
-  , ruStrategy :: Strategy
-  , ruCursor   :: TVar Int
+  { ruBackends         :: Vector RuntimeBackend    -- O(1) indexing
+  , ruWeightedBackends :: Vector RuntimeBackend    -- pre-computed expanded list for weighted RR
+  , ruStrategy         :: Strategy
+  , ruCursor           :: TVar Int
   }
 
 routesFromRuntime :: Runtime -> [RouteConfig]

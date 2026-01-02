@@ -34,5 +34,10 @@ proxyApp runtime req respond = do
             responseLBS status502 [] "Upstream not found"
 
         Just ru -> do
-          backend <- pickBackend ru
-          forwardRequest backend req respond
+          mBackend <- pickBackend ru
+          case mBackend of
+            Nothing ->
+              respond $
+                responseLBS status503 [] "No backends available"
+            Just backend ->
+              forwardRequest backend req respond
