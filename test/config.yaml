@@ -1,0 +1,130 @@
+# Comprehensive test configuration for cutelb
+# This config tests ALL features of the load balancer
+
+server:
+  listen: 3000
+  access_log: ./access.log
+  error_log: ./error.log
+
+upstreams:
+  # Test 1: Round Robin (simple rotation)
+  round_robin_backend:
+    strategy: round_robin
+    servers:
+      - host: localhost
+        port: 8001
+      - host: localhost
+        port: 8002
+      - host: localhost
+        port: 8003
+
+  # Test 2: Weighted Round Robin (proportional distribution)
+  weighted_backend:
+    strategy: weighted_round_robin
+    servers:
+      - host: localhost
+        port: 8001
+        weight: 5    # Should receive ~50% of traffic
+      - host: localhost
+        port: 8002
+        weight: 3    # Should receive ~30% of traffic
+      - host: localhost
+        port: 8003
+        weight: 2    # Should receive ~20% of traffic
+
+  # Test 3: Least Connections (prefer idle backends)
+  least_conn_backend:
+    strategy: least_conn
+    servers:
+      - host: localhost
+        port: 8001
+      - host: localhost
+        port: 8002
+      - host: localhost
+        port: 8003
+      - host: localhost
+        port: 8004
+
+  # Test 4: Random (uniform random selection)
+  random_backend:
+    strategy: random
+    servers:
+      - host: localhost
+        port: 8001
+      - host: localhost
+        port: 8002
+      - host: localhost
+        port: 8003
+
+  # Test 5: Least Response Time (prefer fastest backends)
+  least_response_time_backend:
+    strategy: least_response_time
+    servers:
+      - host: localhost
+        port: 8001  # Will have configurable delay
+      - host: localhost
+        port: 8002  # Will have configurable delay
+      - host: localhost
+        port: 8003  # Will have configurable delay
+      - host: localhost
+        port: 8004  # Will have configurable delay
+
+  # Test 6: Single backend (edge case)
+  single_backend:
+    strategy: round_robin
+    servers:
+      - host: localhost
+        port: 8001
+
+routes:
+  # Exact match routes (highest priority)
+  - path: /exact
+    upstream: round_robin_backend
+    match_type: exact
+
+  - path: /exact/nested/path
+    upstream: weighted_backend
+    match_type: exact
+
+  # Regex match routes (medium priority)
+  - path: "^/api/v[0-9]+/.*"
+    upstream: least_conn_backend
+    match_type: regex
+
+  - path: "^/users/[0-9]+$"
+    upstream: random_backend
+    match_type: regex
+
+  - path: "^/items/[a-zA-Z0-9-]+/details$"
+    upstream: least_response_time_backend
+    match_type: regex
+
+  # Prefix match routes (lower priority)
+  - path: /rr/
+    upstream: round_robin_backend
+    match_type: prefix
+
+  - path: /weighted/
+    upstream: weighted_backend
+    match_type: prefix
+
+  - path: /lc/
+    upstream: least_conn_backend
+    match_type: prefix
+
+  - path: /random/
+    upstream: random_backend
+    match_type: prefix
+
+  - path: /lrt/
+    upstream: least_response_time_backend
+    match_type: prefix
+
+  - path: /single/
+    upstream: single_backend
+    match_type: prefix
+
+  # Catch-all route (must be last due to shortest prefix)
+  - path: /
+    upstream: round_robin_backend
+    match_type: prefix
