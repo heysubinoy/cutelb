@@ -10,6 +10,8 @@ upstreams:
   # Test 1: Round Robin (simple rotation)
   round_robin_backend:
     strategy: round_robin
+    health_check: /health   # probe every backend; dead ones leave the rotation
+    health_interval: 3
     servers:
       - host: localhost
         port: 8001
