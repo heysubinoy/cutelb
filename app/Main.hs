@@ -6,6 +6,7 @@ import Server.HTTP (startHTTP)
 import Config.Loader (loadConfig)
 import Config.Validate (validateConfig)
 import Runtime.Init (initRuntime)
+import Runtime.Health (startHealthChecks)
 import Log
 
 import qualified Data.Text as T
@@ -40,6 +41,7 @@ main = do
         Right validCfg -> do
           logInfo "Configuration validated successfully"
           runtime <- initRuntime validCfg
+          startHealthChecks runtime
           startHTTP runtime
 
 handleLoadError :: SomeException -> IO (Either T.Text a)

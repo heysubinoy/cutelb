@@ -2,7 +2,7 @@ cabal-version:      3.0
 name:               cutelb
 version:            0.1.0.0
 synopsis:           A cute load balancer written in Haskell
-description:        A lightweight HTTP load balancer with round-robin and least-connections strategies.
+description:        A lightweight HTTP load balancer with five balancing strategies, path routing and active health checks.
 license:            MIT
 author:             Subinoy Biswas
 maintainer:         heysubinoy@gmail.com
@@ -22,6 +22,7 @@ library
         Proxy.App
         Proxy.Forward
         Proxy.Routes
+        Runtime.Health
         Runtime.Init
         Runtime.State
         Server.HTTP

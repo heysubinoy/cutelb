@@ -3,14 +3,14 @@ module Upstream.Strategy where
 import Runtime.State
 import Config.Types (Strategy(..))
 import Control.Concurrent.STM
-import Data.List (minimumBy)
+import Data.List (minimumBy, partition)
 import Data.Ord (comparing)
 import System.Random (randomRIO)
 import qualified Data.Vector as V
 
 
 -- | Pick a backend based on the configured strategy.
--- Returns Nothing if no backends are available.
+-- Only healthy backends are considered; returns Nothing if none are available.
 pickBackend :: RuntimeUpstream -> IO (Maybe RuntimeBackend)
 pickBackend ru =
   case ruStrategy ru of
@@ -20,75 +20,64 @@ pickBackend ru =
     Random             -> randomBackend ru
     LeastResponseTime  -> leastResponseTime ru
 
--- | Simple round robin: each backend is selected in turn, ignoring weights.
+-- | Backends currently marked healthy by the health checker.
+healthyOnly :: V.Vector RuntimeBackend -> STM (V.Vector RuntimeBackend)
+healthyOnly = V.filterM (readTVar . rbHealthy)
+
+-- | Advance the shared cursor and pick from the given candidates.
+cycleThrough :: RuntimeUpstream -> V.Vector RuntimeBackend -> STM (Maybe RuntimeBackend)
+cycleThrough ru candidates
+  | V.null candidates = pure Nothing
+  | otherwise = do
+      i <- readTVar (ruCursor ru)
+      writeTVar (ruCursor ru) (i + 1)
+      pure $ Just (candidates V.! (i `mod` V.length candidates))
+
+-- | Simple round robin: each healthy backend is selected in turn, ignoring weights.
 roundRobin :: RuntimeUpstream -> STM (Maybe RuntimeBackend)
-roundRobin ru
-  | V.null backends = pure Nothing
-  | otherwise = do
-      i <- readTVar (ruCursor ru)
-      let idx = i `mod` V.length backends
-      writeTVar (ruCursor ru) (i + 1)
-      pure $ Just (backends V.! idx)
-  where
-    backends = ruBackends ru
+roundRobin ru = healthyOnly (ruBackends ru) >>= cycleThrough ru
 
--- | Weighted round robin: backends are selected proportionally to their weights.
--- Uses pre-computed expanded list for efficiency.
+-- | Weighted round robin: healthy backends are selected proportionally to their weights.
+-- Uses the pre-computed expanded list for efficiency.
 weightedRoundRobin :: RuntimeUpstream -> STM (Maybe RuntimeBackend)
-weightedRoundRobin ru
-  | V.null expanded = pure Nothing
-  | otherwise = do
-      i <- readTVar (ruCursor ru)
-      let idx = i `mod` V.length expanded
-      writeTVar (ruCursor ru) (i + 1)
-      pure $ Just (expanded V.! idx)
-  where
-    expanded = ruWeightedBackends ru
+weightedRoundRobin ru = healthyOnly (ruWeightedBackends ru) >>= cycleThrough ru
 
--- | Least connections: select the backend with the fewest active connections.
+-- | Least connections: select the healthy backend with the fewest active connections.
 leastConn :: RuntimeUpstream -> STM (Maybe RuntimeBackend)
-leastConn ru
-  | V.null (ruBackends ru) = pure Nothing
-  | otherwise = do
-      backendCounts <- mapM withConnCount (V.toList $ ruBackends ru)
-      pure $ Just $ snd $ minimumBy (comparing fst) backendCounts
+leastConn ru = do
+  candidates <- healthyOnly (ruBackends ru)
+  if V.null candidates
+    then pure Nothing
+    else do
+      counts <- mapM withConnCount (V.toList candidates)
+      pure $ Just $ snd $ minimumBy (comparing fst) counts
   where
     withConnCount rb = do
       count <- readTVar (rbConnections rb)
       pure (count, rb)
 
--- | Random: pick a backend at random.
+-- | Random: pick a healthy backend at random.
 randomBackend :: RuntimeUpstream -> IO (Maybe RuntimeBackend)
-randomBackend ru
-  | V.null backends = pure Nothing
-  | otherwise = do
-      idx <- randomRIO (0, V.length backends - 1)
-      pure $ Just (backends V.! idx)
-  where
-    backends = ruBackends ru
+randomBackend ru = do
+  candidates <- atomically $ healthyOnly (ruBackends ru)
+  if V.null candidates
+    then pure Nothing
+    else do
+      idx <- randomRIO (0, V.length candidates - 1)
+      pure $ Just (candidates V.! idx)
 
--- | Least response time: select the backend with the lowest average response time.
--- Backends with 0 response time (untested) are selected via round-robin to warm them up.
+-- | Least response time: select the healthy backend with the lowest average response time.
+-- Backends with no measurements yet are tried first, round-robin, to warm them up.
 leastResponseTime :: RuntimeUpstream -> IO (Maybe RuntimeBackend)
-leastResponseTime ru
-  | V.null (ruBackends ru) = pure Nothing
-  | otherwise = do
-      backendTimes <- atomically $ mapM withRespTime (V.toList $ ruBackends ru)
-      let (untested, tested) = partition (\(rt, _) -> rt == 0.0) backendTimes
-      case untested of
-        -- If there are untested backends, use round-robin among them
-        (_:_) -> atomically $ do
-          i <- readTVar (ruCursor ru)
-          let untestedVec = V.fromList (map snd untested)
-              idx = i `mod` V.length untestedVec
-          writeTVar (ruCursor ru) (i + 1)
-          pure $ Just (untestedVec V.! idx)
-        -- All backends tested, pick the one with lowest response time
-        [] -> pure $ Just $ snd $ minimumBy (comparing fst) tested
+leastResponseTime ru = atomically $ do
+  candidates <- healthyOnly (ruBackends ru)
+  timed <- mapM withRespTime (V.toList candidates)
+  let (untested, tested) = partition (\(rt, _) -> rt == 0.0) timed
+  case (untested, tested) of
+    ([], [])  -> pure Nothing
+    ((_:_), _) -> cycleThrough ru (V.fromList (map snd untested))
+    ([], _)   -> pure $ Just $ snd $ minimumBy (comparing fst) tested
   where
     withRespTime rb = do
       rt <- readTVar (rbResponseTime rb)
       pure (rt, rb)
-
-    partition :: (a -> Bool) -> [a] -> ([a], [a])
-    partition p xs = (filter p xs, filter (not . p) xs)

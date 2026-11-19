@@ -19,8 +19,8 @@ import Data.Time.Clock (getCurrentTime, diffUTCTime)
 emaAlpha :: Double
 emaAlpha = 0.2
 
-forwardRequest :: RuntimeBackend -> Wai.Request -> (Wai.Response -> IO Wai.ResponseReceived) -> IO Wai.ResponseReceived
-forwardRequest rb waiReq respond = do
+forwardRequest :: Manager -> RuntimeBackend -> Wai.Request -> (Wai.Response -> IO Wai.ResponseReceived) -> IO Wai.ResponseReceived
+forwardRequest manager rb waiReq respond = do
   startTime <- getCurrentTime
   let backendHost = Cfg.host (rbConfig rb)
       backendPort = Cfg.port (rbConfig rb)
@@ -35,7 +35,7 @@ forwardRequest rb waiReq respond = do
       atomically $ modifyTVar' (rbResponseTime rb) (updateEMA elapsed)
       logDebug $ "Request completed: backend=" <> backendAddr <> " duration=" <> T.pack (show elapsed) <> "s"
     )
-    (\_ -> doForward (rbConfig rb) waiReq respond backendAddr)
+    (\_ -> doForward manager (rbConfig rb) waiReq respond backendAddr)
 
 -- | Update exponential moving average
 updateEMA :: Double -> Double -> Double
@@ -43,10 +43,16 @@ updateEMA newValue oldAvg
   | oldAvg == 0 = newValue  -- first request, use actual value
   | otherwise   = emaAlpha * newValue + (1 - emaAlpha) * oldAvg
 
-doForward :: Cfg.BackendConfig -> Wai.Request -> (Wai.Response -> IO Wai.ResponseReceived) -> T.Text -> IO Wai.ResponseReceived
-doForward backend waiReq respond backendAddr = do
-  manager <- newManager defaultManagerSettings
+-- | Hop-by-hop and framing headers that must not be copied between the two
+-- connections; the HTTP client and Warp each set their own.
+hopByHop :: [HeaderName]
+hopByHop = ["Connection", "Keep-Alive", "Transfer-Encoding", "Content-Length", "Upgrade"]
 
+stripHopByHop :: [Header] -> [Header]
+stripHopByHop = filter (\(name, _) -> name `notElem` hopByHop)
+
+doForward :: Manager -> Cfg.BackendConfig -> Wai.Request -> (Wai.Response -> IO Wai.ResponseReceived) -> T.Text -> IO Wai.ResponseReceived
+doForward manager backend waiReq respond backendAddr = do
   body <- Wai.strictRequestBody waiReq
 
   let url =
@@ -54,15 +60,16 @@ doForward backend waiReq respond backendAddr = do
         <> T.unpack (Cfg.host backend)
         <> ":"
         <> show (Cfg.port backend)
-        <> BS.unpack (Wai.rawPathInfo waiReq)
+        <> BS.unpack (Wai.rawPathInfo waiReq <> Wai.rawQueryString waiReq)
 
   result <- try $ do
     initReq <- parseRequest url
     let proxyReq =
           initReq
             { method = Wai.requestMethod waiReq
-            , requestHeaders = Wai.requestHeaders waiReq
+            , requestHeaders = stripHopByHop (Wai.requestHeaders waiReq)
             , requestBody = RequestBodyLBS body
+            , decompress = const False  -- pass bodies through byte-for-byte, matching Content-Encoding
             }
     httpLbs proxyReq manager
 
@@ -91,5 +98,5 @@ doForward backend waiReq respond backendAddr = do
       respond $
         Wai.responseLBS
           respStatus
-          (responseHeaders resp)
+          (stripHopByHop (responseHeaders resp))
           (responseBody resp)

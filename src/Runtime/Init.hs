@@ -10,6 +10,7 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Vector as V
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import Network.HTTP.Client (newManager, defaultManagerSettings)
 
 initRuntime :: Config -> IO Runtime
 initRuntime cfg = do
@@ -20,8 +21,9 @@ initRuntime cfg = do
   -- Log upstream and backend info
   mapM_ logUpstreamInfo (Map.toList ups)
   logInfo $ "Loaded " <> T.pack (show (length $ routes cfg)) <> " route(s)"
-  
-  pure $ Runtime tvar (routes cfg) (server cfg)
+
+  manager <- newManager defaultManagerSettings
+  pure $ Runtime tvar (routes cfg) (server cfg) manager
 
 logUpstreamInfo :: (T.Text, RuntimeUpstream) -> IO ()
 logUpstreamInfo (name, ru) = do
@@ -52,6 +54,8 @@ initUpstream u = do
     , ruWeightedBackends = weightedVec
     , ruStrategy         = strategy u
     , ruCursor           = cursor
+    , ruHealthCheck      = health_check u
+    , ruHealthInterval   = max 1 (fromMaybe 5 (health_interval u))
     }
   where
     expandBackend :: RuntimeBackend -> [RuntimeBackend]
@@ -64,8 +68,10 @@ initBackend :: Config.Types.BackendConfig -> STM RuntimeBackend
 initBackend bc = do
   conns <- newTVar 0
   respTime <- newTVar 0.0  -- start with 0, will be updated after first request
+  healthy <- newTVar True   -- assume healthy until a probe says otherwise
   pure RuntimeBackend
     { rbConfig       = bc
     , rbConnections  = conns
     , rbResponseTime = respTime
+    , rbHealthy      = healthy
     }

@@ -19,9 +19,10 @@ instance FromJSON ServerConfig
 
 
 data UpstreamConfig = UpstreamConfig
-  { strategy     :: Strategy
-  , health_check :: Maybe Text
-  , servers      :: [BackendConfig]
+  { strategy        :: Strategy
+  , health_check    :: Maybe Text  -- ^ path to probe, e.g. "/health"; omit to disable
+  , health_interval :: Maybe Int   -- ^ seconds between probes (default 5)
+  , servers         :: [BackendConfig]
   } deriving (Show, Generic)
 
 instance FromJSON UpstreamConfig

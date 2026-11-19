@@ -73,7 +73,7 @@ proxyApp runtime req respond = do
                 , ("backend", backendHost <> ":" <> backendPort)
                 , ("strategy", T.pack $ show $ ruStrategy ru)
                 ]
-              forwardRequest backend req respond
+              forwardRequest (rtManager runtime) backend req respond
 
 -- Helper to get remote host (simplified)
 remoteHost' :: Request -> Maybe (BS.ByteString, Int)
